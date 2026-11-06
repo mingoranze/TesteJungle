@@ -5,7 +5,6 @@ Marketplace de NFTs em **React + TypeScript** com descoberta, conta, carrinho, c
 **Demo publicada:** _URL_PENDENTE_
 
 - Contratos REST e de eventos, sessão, carrinho, cache, reconciliação, limitações e desvios do Figma: [`ARCHITECTURE.md`](ARCHITECTURE.md).
-- Decisões e verificações de cada etapa: [`referencia/docs/`](referencia/docs/). O PRD e as imagens de referência citados nesses documentos não fazem parte do repositório.
 
 ---
 
