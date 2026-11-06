@@ -1,7 +1,8 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Heart, Linkedin, Mail, Minus, Plus, ShoppingCart, Star, Twitter } from 'lucide-react';
+import { ArrowLeft, Heart, Linkedin, Mail, Minus, Plus, Star, Twitter } from 'lucide-react';
+import cartIcon from '@/assets/images/cart.png';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusMessage } from '@/components/ui/status-message';
@@ -12,6 +13,11 @@ import { ApiError } from '@/lib/api-error';
 import { compareDecimal, formatEth } from '@/lib/decimal';
 import { nftKeys } from '@/lib/query-keys';
 import { useFavorites, useToggleFavorite } from '@/features/favorites/use-favorites';
+
+/** Ordem fixa da vitrine "Mais desta coleção": Cosmic Bloom, Violet Nomad, Ivory Baron, Golden Beat, Golden Signal. */
+const RELATED_SHOWCASE_IDS = ['nft-004', 'nft-005', 'nft-006', 'nft-007', 'nft-009'];
+const RELATED_PAGE_SIZE = 5;
+const RELATED_INITIAL_PAGE = 1;
 
 function DetailSkeleton() {
   return (
@@ -82,6 +88,8 @@ export function NftDetailPage({ nftId }: { nftId: string }) {
   const favorite = Boolean(favoritesQuery.data?.some((item) => item.nftId === nftId));
   const [notice, setNotice] = useState<{ message: string; error: boolean }>();
   const [tab, setTab] = useState<'details' | 'reviews'>('details');
+  const [relatedPage, setRelatedPage] = useState(RELATED_INITIAL_PAGE);
+  useEffect(() => setRelatedPage(RELATED_INITIAL_PAGE), [nftId]);
   const nftQuery = useQuery(nftDetailQueryOptions(nftId));
   const nft = nftQuery.data;
   const changeNotice = useNftChangeNotice(nft);
@@ -92,13 +100,9 @@ export function NftDetailPage({ nftId }: { nftId: string }) {
     ? Math.min(nft.availableEditions, activeEdition?.maxQuantity ?? nft.availableEditions)
     : 1;
   const relatedQuery = useQuery({
-    queryKey: nftKeys.list({ collectionId: nft?.collectionId, page: 1, pageSize: 50 }),
-    queryFn: ({ signal }) => listNfts({
-      collectionId: nft?.collectionId,
-      page: 1,
-      pageSize: 50,
-    }, signal),
-    enabled: Boolean(nft?.collectionId),
+    queryKey: nftKeys.list({ page: 1, pageSize: 50 }),
+    queryFn: ({ signal }) => listNfts({ page: 1, pageSize: 50 }, signal),
+    enabled: Boolean(nft),
     placeholderData: keepPreviousData,
   });
 
@@ -188,9 +192,24 @@ export function NftDetailPage({ nftId }: { nftId: string }) {
 
   if (!nft) return null;
 
-  const related = (relatedQuery.data as PaginatedResponse<Nft> | undefined)?.items
-    .filter((item) => item.id !== nft.id)
-    .slice(0, 5) ?? [];
+  const relatedPool = ((relatedQuery.data as PaginatedResponse<Nft> | undefined)?.items ?? [])
+    .filter((item) => item.id !== nft.id && !item.showcaseOnly);
+  const showcase = RELATED_SHOWCASE_IDS
+    .map((id) => relatedPool.find((item) => item.id === id))
+    .filter((item): item is Nft => Boolean(item));
+  const others = [
+    ...relatedPool.filter((item) => item.collectionId === nft.collectionId && !RELATED_SHOWCASE_IDS.includes(item.id)),
+    ...relatedPool.filter((item) => item.collectionId !== nft.collectionId && !RELATED_SHOWCASE_IDS.includes(item.id)),
+  ];
+  // A vitrine fixa fica na página do meio; as demais páginas trazem outras obras.
+  const middlePage = [...showcase, ...others].slice(0, RELATED_PAGE_SIZE);
+  const remaining = others.filter((item) => !middlePage.includes(item));
+  const relatedPages = [
+    remaining.slice(0, RELATED_PAGE_SIZE),
+    middlePage,
+    remaining.slice(RELATED_PAGE_SIZE, RELATED_PAGE_SIZE * 2),
+  ].filter((pageItems) => pageItems.length > 0);
+  const activeRelatedPage = Math.min(relatedPage, Math.max(0, relatedPages.length - 1));
   const soldOut = nft.availableEditions < 1;
   const galleryImages = nft.imageUrl ? Array.from({ length: 4 }, () => nft.imageUrl as string) : [];
 
@@ -217,8 +236,8 @@ export function NftDetailPage({ nftId }: { nftId: string }) {
 
         <nav aria-label="Trilha de navegação" className="mb-5 hidden text-sm lg:block">
           <Link to="/" className="hover:text-primary">Início</Link>
-          <span className="px-2 text-secondary">/</span>
-          <a href="/#catalogo" className="hover:text-primary">Mercado</a>
+          <span className="px-2">/</span>
+          <a href={`${import.meta.env.BASE_URL}#catalogo`} className="hover:text-primary">Mercado</a>
         </nav>
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-8 max-lg:absolute max-lg:inset-0 max-lg:block">
@@ -348,9 +367,7 @@ export function NftDetailPage({ nftId }: { nftId: string }) {
                 >
                   <Plus aria-hidden="true" size={16} className="text-canvas" />
                 </Button>
-                <span className="ml-1 text-xs text-secondary">
-                  {soldOut ? 'Indisponível' : `${nft.availableEditions} disponíveis`}
-                </span>
+                {soldOut && <span className="ml-1 text-xs text-secondary">Indisponível</span>}
               </div>
               <div className="hidden gap-2 lg:flex">
                 <Button
@@ -485,8 +502,41 @@ export function NftDetailPage({ nftId }: { nftId: string }) {
               <Button type="button" variant="secondary" onClick={() => void relatedQuery.refetch()}>Tentar novamente</Button>
             </StatusMessage>
           ) : (
-            <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-              {related.map((item) => <NftCard key={item.id} nft={item} />)}
+            <div className="mt-6" role="region" aria-roledescription="carrossel" aria-label="Mais desta coleção">
+              <div className="overflow-hidden">
+                <div
+                  className="flex transition-transform duration-500 ease-out motion-reduce:transition-none"
+                  style={{ transform: `translateX(-${activeRelatedPage * 100}%)` }}
+                >
+                  {relatedPages.map((pageItems, pageIndex) => (
+                    <div
+                      key={pageIndex}
+                      role="group"
+                      aria-roledescription="slide"
+                      aria-label={`${pageIndex + 1} de ${relatedPages.length}`}
+                      aria-hidden={pageIndex !== activeRelatedPage}
+                      inert={pageIndex !== activeRelatedPage}
+                      className="grid w-full shrink-0 grid-cols-5 gap-4"
+                    >
+                      {pageItems.map((item) => <NftCard key={item.id} nft={item} />)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {relatedPages.length > 1 && (
+                <div className="mt-6 flex justify-center gap-2">
+                  {relatedPages.map((_, pageIndex) => (
+                    <button
+                      key={pageIndex}
+                      type="button"
+                      aria-label={`Mostrar página ${pageIndex + 1} de ${relatedPages.length}`}
+                      aria-current={pageIndex === activeRelatedPage ? 'true' : undefined}
+                      onClick={() => setRelatedPage(pageIndex)}
+                      className={`size-2.5 rounded-full border border-primary transition-colors hover:bg-primary/60 ${pageIndex === activeRelatedPage ? 'bg-primary' : 'bg-transparent'}`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -495,37 +545,37 @@ export function NftDetailPage({ nftId }: { nftId: string }) {
       <div className="fixed inset-x-0 bottom-0 z-30 rounded-t-[2rem] bg-surface px-6 pb-[max(env(safe-area-inset-bottom),1rem)] pt-4 shadow-[0_-8px_24px_rgb(0_0_0/0.18)] lg:hidden max-lg:absolute max-lg:inset-x-px max-lg:bottom-0 max-lg:z-20 max-lg:h-[116px] max-lg:rounded-t-[2rem] max-lg:bg-[#21140f] max-lg:px-6 max-lg:pb-[18px] max-lg:pt-3 max-lg:shadow-none">
         <div className="mx-auto flex max-w-[600px] items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-secondary">Qtd.</span>
+            <span className="text-secondary max-lg:text-sm">Qtd.</span>
             <Button
               type="button"
               variant="default"
               size="sm"
               aria-label="Diminuir quantidade"
-              className="size-6 min-h-6 rounded-full px-0 py-0"
+              className="size-6 min-h-6 rounded-full px-0 py-0 max-lg:h-8 max-lg:min-h-8 max-lg:w-[22px] max-lg:border max-lg:border-black/40 max-lg:text-canvas"
               disabled={quantity <= 1 || soldOut}
               onClick={() => setQuantity((value) => Math.max(1, value - 1))}
             >
               <Minus aria-hidden="true" size={12} />
             </Button>
-            <span aria-label="Quantidade selecionada" aria-live="polite" className="min-w-4 text-center">{quantity}</span>
+            <span aria-label="Quantidade selecionada" aria-live="polite" className="min-w-4 text-center max-lg:min-w-6 max-lg:text-lg">{quantity}</span>
             <Button
               type="button"
               variant="default"
               size="sm"
               aria-label="Aumentar quantidade"
-              className="size-6 min-h-6 rounded-full px-0 py-0"
+              className="size-6 min-h-6 rounded-full px-0 py-0 max-lg:h-8 max-lg:min-h-8 max-lg:w-[22px] max-lg:border max-lg:border-black/40 max-lg:text-canvas"
               disabled={soldOut || quantity >= quantityLimit}
               onClick={() => setQuantity((value) => Math.min(quantityLimit, value + 1))}
             >
               <Plus aria-hidden="true" size={12} />
             </Button>
           </div>
-          <strong className="font-mono text-base text-primary">{nft.priceEth} ETH</strong>
+          <strong className="font-mono text-base text-primary max-lg:text-xl">{nft.priceEth} ETH</strong>
         </div>
-        <div className="mx-auto mt-2.5 flex max-w-[600px] gap-2.5">
+        <div className="mx-auto mt-2.5 flex max-w-[600px] gap-2.5 max-lg:gap-3">
           <Button
             type="button"
-            className="min-h-12 flex-1 rounded-full text-sm max-lg:min-h-[52px] max-lg:bg-[#d28a4c] max-lg:text-black"
+            className="min-h-12 flex-1 rounded-full text-sm max-lg:min-h-[52px] max-lg:w-[170px] max-lg:flex-none max-lg:bg-linear-to-r max-lg:from-[#d48d4f] max-lg:to-[#b97a45] max-lg:text-base max-lg:text-black"
             disabled={soldOut || addToCartMutation.isPending}
             onClick={() => addToCart(true)}
           >
@@ -534,12 +584,12 @@ export function NftDetailPage({ nftId }: { nftId: string }) {
           <Button
             type="button"
             variant="secondary"
-            className="min-h-12 rounded-full max-lg:size-[52px] max-lg:min-h-[52px] max-lg:border-border max-lg:bg-transparent max-lg:text-primary"
+            className="min-h-12 rounded-full max-lg:size-[52px] max-lg:min-h-[52px] max-lg:border-white/5 max-lg:bg-[#2c1c16] max-lg:p-0"
             aria-label="Adicionar ao carrinho"
             disabled={soldOut || addToCartMutation.isPending}
             onClick={() => addToCart(false)}
           >
-            <ShoppingCart aria-hidden="true" size={16} />
+            <img src={cartIcon} alt="" aria-hidden="true" className="h-[17px] w-[18px]" />
           </Button>
         </div>
       </div>

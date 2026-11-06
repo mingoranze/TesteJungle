@@ -1,7 +1,9 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowRight, ChevronLeft, ChevronRight, Search, SlidersHorizontal } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Heart, Search } from 'lucide-react';
+import { useFavorites, useToggleFavorite } from '@/features/favorites/use-favorites';
+import filterIcon from '@/assets/images/Filter.png';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -269,9 +271,47 @@ function CollectionFilters({
   );
 }
 
+/** NFTs que recebem a faixa "RARO" no cartão mobile (Neon Vessel #552). */
+const RARE_NFT_IDS = ['nft-003'];
+
+/** Botão de favoritar sobre a arte do cartão, exibido somente no layout mobile. */
+function CardFavoriteButton({ nft }: { nft: Nft }) {
+  const navigate = useNavigate();
+  const favoritesQuery = useFavorites();
+  const favoriteMutation = useToggleFavorite();
+  const favorite = Boolean(favoritesQuery.data?.some((item) => item.nftId === nft.id));
+
+  const toggle = () => {
+    if (!favoritesQuery.userId) {
+      void navigate({ to: '/login', search: { redirect: '/' } });
+      return;
+    }
+    favoriteMutation.mutate({ userId: favoritesQuery.userId, nftId: nft.id, favorite: !favorite });
+  };
+
+  return (
+    <button
+      type="button"
+      aria-label={favorite ? `Remover ${nft.title} dos favoritos` : `Favoritar ${nft.title}`}
+      aria-pressed={favorite}
+      disabled={favoriteMutation.isPending}
+      onClick={toggle}
+      className="absolute right-3 top-3 z-10 grid size-9 place-items-center rounded-full bg-surface text-primary lg:hidden"
+    >
+      <Heart aria-hidden="true" size={18} strokeWidth={1.75} fill={favorite ? 'currentColor' : 'none'} />
+    </button>
+  );
+}
+
 function NftCard({ nft, index }: { nft: Nft; index: number }) {
   return (
-    <article className={`min-w-0 ${index % 2 === 1 ? 'translate-y-6 lg:translate-y-0' : ''}`}>
+    <article className={`relative min-w-0 ${index % 2 === 1 ? 'translate-y-6 lg:translate-y-0' : ''}`}>
+      <CardFavoriteButton nft={nft} />
+      {RARE_NFT_IDS.includes(nft.id) && (
+        <span className="pointer-events-none absolute left-1 top-4 z-10 bg-primary px-3 py-1.5 font-sans text-sm font-bold tracking-wide text-canvas lg:hidden">
+          RARO
+        </span>
+      )}
       <Link
         to="/nfts/$nftId"
         params={{ nftId: nft.id }}
@@ -395,7 +435,7 @@ export function HomePage({
           onClick={() => setFiltersOpen((open) => !open)}
           className="grid size-11 place-items-center rounded-xl bg-primary text-canvas"
         >
-          <SlidersHorizontal aria-hidden="true" size={20} />
+          <img src={filterIcon} alt="" aria-hidden="true" className="size-5" />
         </button>
       </div>
 
@@ -618,7 +658,7 @@ export function HomePage({
             <p className="mt-2 text-xs leading-relaxed text-secondary">
               Colecione edições escassas diretamente dos criadores antes da revelação pública.
             </p>
-            <a href="#catalogo" className="mt-2 inline-flex items-center gap-1 rounded bg-primary px-4 py-1.5 text-xs font-semibold text-canvas">
+            <a href="#catalogo" className="mt-2 inline-flex items-center gap-1 self-end rounded bg-primary px-4 py-1.5 text-xs font-semibold text-canvas">
               Explorar <ArrowRight aria-hidden="true" size={13} />
             </a>
           </div>
@@ -630,7 +670,7 @@ export function HomePage({
             <p className="mt-2 text-xs leading-relaxed text-secondary">
               Explore novos artistas, coleções verificadas e obras digitais que definem a cultura.
             </p>
-            <a href="#catalogo" className="mt-2 inline-flex items-center gap-1 rounded bg-primary px-4 py-1.5 text-xs font-semibold text-canvas">
+            <a href="#catalogo" className="mt-2 inline-flex items-center gap-1 self-end rounded bg-primary px-4 py-1.5 text-xs font-semibold text-canvas">
               Explorar <ArrowRight aria-hidden="true" size={13} />
             </a>
           </div>

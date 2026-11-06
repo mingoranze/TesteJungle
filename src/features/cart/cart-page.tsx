@@ -1,7 +1,8 @@
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { ChevronLeft, Minus, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, Minus, Plus } from 'lucide-react';
+import deleteIcon from '@/assets/images/Delete.png';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusMessage } from '@/components/ui/status-message';
@@ -66,6 +67,7 @@ function QuantityControl({
   limit,
   disabled,
   onChange,
+  onRemove,
   variant,
 }: {
   title: string;
@@ -73,6 +75,7 @@ function QuantityControl({
   limit: number;
   disabled: boolean;
   onChange: (quantity: number) => void;
+  onRemove: () => void;
   variant: 'table' | 'card';
 }) {
   const buttonClass = variant === 'table'
@@ -80,6 +83,20 @@ function QuantityControl({
     : 'size-[26px] min-h-[26px] rounded-full px-0 py-0';
   return (
     <div className={cn('flex items-center', variant === 'table' ? 'gap-3' : 'gap-2.5')}>
+      {/* Mobile: com 1 unidade, o "−" vira a lixeira (diminuir abaixo de 1 significa remover o item). */}
+      {variant === 'card' && quantity <= 1 ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          aria-label={`Excluir ${title} do carrinho`}
+          className="size-[26px] min-h-[26px] rounded-full bg-white/10 px-0 py-0 hover:bg-white/15"
+          disabled={disabled}
+          onClick={onRemove}
+        >
+          <img src={deleteIcon} alt="" aria-hidden="true" className="size-4" />
+        </Button>
+      ) : (
       <Button
         type="button"
         size="sm"
@@ -91,6 +108,7 @@ function QuantityControl({
       >
         <Minus aria-hidden="true" size={12} strokeWidth={3} />
       </Button>
+      )}
       <span className="min-w-4 text-center" aria-label={`Quantidade de ${title}`} aria-live="polite">{quantity}</span>
       <Button
         type="button"
@@ -160,7 +178,7 @@ function CartItemRow({
       disabled={pending}
       onClick={onRemove}
     >
-      <Trash2 aria-hidden="true" size={18} strokeWidth={1.5} />
+      <img src={deleteIcon} alt="" aria-hidden="true" className="size-4.5" />
     </Button>
   );
 
@@ -190,6 +208,7 @@ function CartItemRow({
           limit={limit}
           disabled={pending || Boolean(issue)}
           onChange={onQuantity}
+          onRemove={onRemove}
         />
         <p className="text-[15px] font-bold text-primary" data-testid="cart-line-total">{formatEth(lineTotal)} ETH</p>
         <div className="flex justify-end pr-6">
@@ -222,6 +241,7 @@ function CartItemRow({
             limit={limit}
             disabled={pending || Boolean(issue)}
             onChange={onQuantity}
+            onRemove={onRemove}
           />
         </div>
       </div>
@@ -278,7 +298,7 @@ function CartSummary({ cart }: { cart: CartResponse | undefined }) {
         {body}
         <Button
           type="button"
-          className="h-10 min-h-10 w-full rounded-sm text-[15px] font-bold text-canvas max-md:h-[60px] max-md:rounded-full max-md:bg-gradient-to-r max-md:from-[#d28a4c] max-md:to-[#8a5a35] max-md:text-base max-md:text-foreground"
+          className="h-10 min-h-10 w-full rounded-sm text-[15px] font-bold text-canvas max-md:h-[60px] max-md:rounded-full max-md:bg-gradient-to-r max-md:from-[#d28a4c] max-md:to-[#8a5a35] max-md:text-base max-md:text-black"
           disabled={!canFinish}
           onClick={finish}
         >

@@ -1,0 +1,13 @@
+import { chromium } from 'playwright';
+const B = 'http://localhost:4199/TesteJungle/';
+const b = await chromium.launch(); const p = await b.newPage({ viewport: { width: 1280, height: 820 } });
+await p.goto(B + 'cadastro?redirect=%2Fperfil'); await p.waitForTimeout(3500);
+await p.getByLabel('Nome de usuário').fill('Teste Pages');
+await p.getByLabel('E-mail').fill('pages@teste.com');
+await p.getByLabel('Senha', { exact: true }).fill('senha12345');
+await p.getByLabel('Confirmar senha').fill('senha12345');
+await p.locator('button[type=submit]').click(); await p.waitForTimeout(4000);
+console.log('após cadastro:', p.url());
+await p.goto(B + 'perfil'); await p.waitForTimeout(3000); console.log('perfil logado:', p.url());
+await p.reload(); await p.waitForTimeout(3000); console.log('reload:', p.url());
+await b.close();

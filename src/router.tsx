@@ -133,6 +133,7 @@ const routeTree = rootRoute.addChildren([
 
 export const router = createRouter({
   routeTree,
+  basepath: import.meta.env.BASE_URL,
   defaultPreload: 'intent',
 });
 
